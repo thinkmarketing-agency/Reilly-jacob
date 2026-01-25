@@ -1,17 +1,12 @@
 // Minimal JavaScript for enhanced interactions
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing lightbox...');
-    
     // Lightbox functionality
     const lightbox = document.getElementById('lightbox');
     const lightboxImg = document.getElementById('lightbox-img');
     const closeBtn = document.querySelector('.lightbox-close');
     const prevBtn = document.querySelector('.lightbox-prev');
     const nextBtn = document.querySelector('.lightbox-next');
-    
-    console.log('Lightbox element:', lightbox);
-    console.log('Lightbox image:', lightboxImg);
     
     // Get all clickable images
     const allImages = [];
@@ -22,24 +17,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (saveTheDateImg) {
         allImages.push(saveTheDateImg.src);
         imageElements.push(saveTheDateImg);
-        console.log('Found save-the-date image');
     }
     
     // Add all polaroid images
     const polaroidImages = document.querySelectorAll('.polaroid-photo');
-    console.log('Found polaroid images:', polaroidImages.length);
     polaroidImages.forEach(img => {
         allImages.push(img.src);
         imageElements.push(img);
     });
     
-    console.log('Total images:', allImages.length);
-    
     let currentIndex = 0;
     
     // Function to open lightbox
     function openLightbox(index) {
-        console.log('Opening lightbox, index:', index);
         currentIndex = index;
         lightboxImg.src = allImages[currentIndex];
         
@@ -94,12 +84,10 @@ document.addEventListener('DOMContentLoaded', function() {
         lightboxImg.style.objectFit = 'contain';
         
         document.body.style.overflow = 'hidden';
-        console.log('Lightbox opened');
     }
     
     // Function to close lightbox
     function closeLightbox() {
-        console.log('Closing lightbox');
         lightbox.style.display = 'none';
         document.body.style.overflow = '';
     }
@@ -116,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
         lightboxImg.src = allImages[currentIndex];
     }
     
-    // Add click events to all images (mobile only)
+    // Add click events to all images
     function isMobile() {
         return window.innerWidth <= 768;
     }
@@ -126,16 +114,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const overlayImg = document.getElementById('overlay-img');
     const overlayClose = document.querySelector('.image-overlay-close');
     
-    console.log('Desktop overlay element:', imageOverlay);
-    console.log('Overlay img element:', overlayImg);
-    console.log('Is mobile:', isMobile());
-    
     imageElements.forEach((img, index) => {
         img.style.cursor = 'pointer';
         img.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Image clicked, index:', index);
             openLightbox(index);
         });
     });
@@ -206,8 +189,6 @@ document.addEventListener('DOMContentLoaded', function() {
             showPrev();
         }
     });
-    
-    console.log('Lightbox initialized successfully');
     
     // Smooth scrolling for navigation links
     const navLinks = document.querySelectorAll('.nav-tab');
