@@ -11,11 +11,17 @@
     --shadow-soft: rgba(0, 0, 0, 0.15);
     --pushpin-red: #c84545;
     --pushpin-brass: #b8860b;
+    --note-yellow: #ffd85c;
+    --note-coral: #ffac89;
+    --note-blue: #8cd9f2;
+    --note-green: #b7e58f;
+    --note-peach: #ffd1a8;
     
     /* Typography */
     --font-script: 'Dancing Script', cursive;
     --font-serif: 'Playfair Display', serif;
     --font-sans: 'Lato', sans-serif;
+    --font-marker: 'Permanent Marker', cursive;
 }
 
 /* ===========================
@@ -167,6 +173,17 @@ body {
     justify-content: center;
 }
 
+@media (min-width: 769px) {
+    .photos-left,
+    .photos-right {
+        align-self: stretch;
+        justify-content: space-between;
+        gap: 0;
+        padding-top: clamp(16px, calc(33.333% - 80px), 180px);
+        padding-bottom: clamp(16px, calc(33.333% - 80px), 180px);
+    }
+}
+
 .nav-tab {
     background: var(--card-white);
     color: var(--text-dark);
@@ -257,8 +274,8 @@ body {
 }
 
 .pushpin::before {
-    grid-column: 2;
-    grid-rowion: absolute;
+    content: '';
+    position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -272,7 +289,221 @@ body {
     background: var(--pushpin-red);
 }
 
-.pushpin-brass {
+/* ===========================
+   Sticky Notes
+   =========================== */
+.sticky-note {
+    width: 190px;
+    min-height: 160px;
+    padding: 34px 18px 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    box-shadow:
+        0 5px 10px rgba(0, 0, 0, 0.18),
+        0 12px 22px rgba(0, 0, 0, 0.25);
+}
+
+.sticky-note::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.35);
+    clip-path: polygon(100% 0, 0 100%, 100% 100%);
+}
+
+.note-registry { background: var(--note-yellow); }
+.note-rsvp { background: var(--note-coral); }
+.note-write { background: var(--note-blue); }
+.note-bend { background: var(--note-green); }
+.note-home { background: var(--note-peach); }
+.note-amazon { background: var(--note-blue); }
+.note-venmo { background: var(--note-coral); }
+
+.note-link {
+    color: #1f1f1f;
+    text-decoration: none;
+    font-family: var(--font-marker);
+    font-size: 1.35rem;
+    line-height: 1.15;
+    letter-spacing: 0.3px;
+    text-transform: none;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.note-subtext {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.78rem;
+    letter-spacing: 0.2px;
+}
+
+/* Single-note layout for the registry page */
+.registry-page .corkboard-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: calc(100vh - 140px);
+    padding-top: 110px;
+}
+
+.registry-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 26px;
+}
+
+.registry-top-notes {
+    display: flex;
+    gap: 18px;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+}
+
+.registry-top-notes .sticky-note {
+    width: 190px;
+    min-height: 145px;
+}
+
+.registry-actions {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+}
+
+.registry-actions .sticky-note {
+    width: 220px;
+    min-height: 130px;
+}
+
+.registry-actions .note-amazon {
+    flex-direction: column;
+    gap: 10px;
+}
+
+.registry-actions .note-venmo {
+    flex-direction: column;
+    gap: 8px;
+}
+
+.registry-actions .note-link {
+    font-size: 1.2rem;
+}
+
+.note-cta {
+    color: #1f1f1f;
+    font-family: var(--font-marker);
+    font-size: 1rem;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.note-recipient-label,
+.note-recipient-email {
+    display: block;
+    color: #1f1f1f;
+    font-family: var(--font-marker);
+    font-size: 0.78rem;
+    line-height: 1.25;
+}
+
+.note-recipient-label {
+    margin-top: 2px;
+}
+
+.note-venmo-handle {
+    display: block;
+    color: #1f1f1f;
+    font-family: var(--font-marker);
+    font-size: 0.95rem;
+    line-height: 1.2;
+}
+
+.note-venmo-image {
+    width: 100%;
+    max-width: 120px;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    background: #fff;
+    align-self: center;
+    display: block;
+}
+
+.legal-pad {
+    width: min(92vw, 640px);
+    min-height: 480px;
+    padding: 44px 34px 34px 58px;
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0) 0,
+            rgba(0, 0, 0, 0) 34px,
+            rgba(153, 118, 14, 0.25) 34px,
+            rgba(153, 118, 14, 0.25) 36px
+        ),
+        #f6de7f;
+    border-radius: 4px;
+    border: 1px solid rgba(120, 92, 12, 0.4);
+    position: relative;
+}
+
+.legal-pad::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 38px;
+    width: 3px;
+    background: rgba(206, 63, 58, 0.55);
+}
+
+.legal-pad-content {
+    min-height: 390px;
+    font-family: var(--font-marker);
+    font-size: 1.2rem;
+    line-height: 1.5;
+    color: #2d2410;
+    white-space: normal;
+    outline: none;
+}
+
+.legal-pad-content p {
+    margin: 0 0 1.1rem;
+}
+
+.pad-heading {
+    margin-bottom: 0.9rem;
+}
+
+.legal-pad-content:focus {
+    outline: none;
+}
+
+.mailing-address {
+    text-align: center;
+    margin: 8px 0 2px;
+    white-space: normal;
+    line-height: 1.2;
+}
+
+.mailing-address strong {
+    display: block;
+}
+
+.legal-pad-content p.after-address {
+    margin-top: 1.8rem;
+    margin-bottom: 1.1rem;
+}
+
+.pad-signoff {
+    margin-top: 0.6rem;
+    margin-bottom: 0;
 }
 
 /* ===========================
@@ -369,128 +600,195 @@ body {
    Responsive Design
    =========================== */
 @media (max-width: 768px) {
-    /* Ensure frame borders work on mobile */
     .frame-top,
     .frame-bottom {
         height: 20px;
     }
-    
+
     .frame-left,
     .frame-right {
         height: 20px;
     }
-    
+
     .frame-left {
         left: 20px;
     }
-    
+
     .frame-right {
         left: 100vw;
     }
-    
+
     .corkboard-container {
-        padding: 60px 10px 40px;
-        gap: 20px;
-        grid-template-columns: auto 200px auto;
-        margin: 20px;
+        padding: 60px 18px 44px;
+        gap: 16px;
+        grid-template-columns: auto 220px auto;
         min-height: calc(100vh - 40px);
     }
-    
+
     .save-the-date {
-        max-width: 200px;
+        max-width: 220px;
         padding: 10px;
     }
-    
-    .save-the-date-image {
-        width: 100%;
+
+    .sticky-note {
+        width: 130px;
+        min-height: 112px;
+        padding: 24px 10px 10px;
     }
-    
-    .photos-left,
-    .photos-right {
-    /* Reduce rotation slightly on mobile */
-    .card[data-rotation="3"],
-    .card[data-rotation="4"],
-    .card[data-rotation="-3"],
-    .card[data-rotation="-4"] {
-        transform: rotate(2deg);
+
+    .note-link {
+        font-size: 1rem;
+    }
+
+    .note-subtext {
+        font-size: 0.65rem;
+        margin-top: 4px;
+    }
+
+    .polaroid.size-small { max-width: 120px; }
+    .polaroid.size-medium { max-width: 150px; }
+    .polaroid.size-large { max-width: 180px; }
+    .polaroid-photo { height: 130px; }
+
+    .legal-pad {
+        min-height: 430px;
+        padding: 40px 24px 26px 48px;
+    }
+
+    .legal-pad::before {
+        left: 30px;
+    }
+
+    .registry-actions .sticky-note {
+        width: 180px;
+        min-height: 132px;
+    }
+
+    .note-recipient-label,
+    .note-recipient-email {
+        font-size: 0.7rem;
+    }
+
+    .note-venmo-handle {
+        font-size: 0.8rem;
+    }
+
+    .note-venmo-image {
+        max-width: 100px;
     }
 }
 
 @media (max-width: 480px) {
     .corkboard-container {
-        grid-template-columns: auto 160px auto;
-        gap: 15px;
-        padding: 50px 8px 30px;
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+        justify-items: center;
+        gap: 18px;
+        padding: 50px 14px 34px;
     }
-    
-    .save-the-date {
-        max-width: 160px;
-        padding: 8px;
-    }
-    
-    .polaroid.size-small {
-        max-width: 80px;
-    }
-    
-    .polaroid.size-medium {
-        max-width: 100px;
-    }
-    
-    .polaroid.size-large {
-        max-width: 120px;
-    }
-    
-    .polaroid-photo {
-        height: 90px;
-    }
-    
-    .polaroid {
-        padding: 8px 8px 1
-    
-    .wedding-location {
-        font-size: 1.1rem;
-    }
-    
-    .card {
-        padding: 25px;
-    }
-    
-    .polaroid {
-        padding: 15px 15px 50px;
-    }
-    
-    /* Reduce rotation on mobile for better readability */
-    .card[data-rotation="3"],
-    .card[data-rotation="4"],
-    .card[data-rotation="-3"],
-    .card[data-rotation="-4"] {
-        transform: rotate(2deg);
-    }
-    
-    .card[data-rotation="3"]:hover,
-    .card[data-rotation="4"]:hover,
-    .card[data-rotation="-3"]:hover,
-    .card[data-rotation="-4"]:hover {
-        transform: rotate(0deg) !important;
-    }
-}
 
-@media (max-width: 480px) {
-    .couple-names {
-        font-size: 2rem;
+    .photos-left,
+    .photos-right {
+        flex-direction: row;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        width: 100%;
     }
-    
-    .wedding-date {
-        font-size: 1.2rem;
+
+    .photos-left {
+        grid-column: 1;
+        grid-row: 1;
+        justify-self: center;
     }
-    
-    .wedding-location {
+
+    .save-the-date {
+        grid-column: 1;
+        grid-row: 2;
+        max-width: 240px;
+    }
+
+    .photos-right {
+        grid-column: 1;
+        grid-row: 3;
+        justify-self: center;
+    }
+
+    .sticky-note {
+        width: 145px;
+        min-height: 106px;
+        padding: 22px 12px 10px;
+    }
+
+    .note-link {
+        font-size: 0.98rem;
+    }
+
+    .photos-bottom {
+        grid-column: 1;
+        grid-row: 4;
+        gap: 16px;
+    }
+
+    .polaroid.size-small { max-width: 125px; }
+    .polaroid.size-medium { max-width: 145px; }
+    .polaroid.size-large { max-width: 170px; }
+    .polaroid-photo { height: 120px; }
+
+    .registry-page .corkboard-container {
+        padding-top: 70px;
+    }
+
+    .legal-pad {
+        min-height: 360px;
+        padding: 36px 16px 20px 42px;
+    }
+
+    .legal-pad::before {
+        left: 26px;
+    }
+
+    .legal-pad-content {
+        min-height: 280px;
         font-size: 1rem;
     }
-    
-    .save-text {
-        font-size: 0.85rem;
-        letter-spacing: 2px;
+
+    .registry-actions {
+        gap: 12px;
+    }
+
+    .registry-actions .sticky-note {
+        width: 150px;
+        min-height: 122px;
+        padding: 20px 10px 10px;
+    }
+
+    .registry-top-notes .sticky-note {
+        width: 150px;
+        min-height: 122px;
+        padding: 20px 10px 10px;
+    }
+
+    .registry-actions .note-link {
+        font-size: 0.95rem;
+    }
+
+    .registry-top-notes .note-link {
+        font-size: 0.95rem;
+    }
+
+    .note-recipient-label,
+    .note-recipient-email {
+        font-size: 0.64rem;
+        line-height: 1.2;
+    }
+
+    .note-venmo-handle {
+        font-size: 0.72rem;
+    }
+
+    .note-venmo-image {
+        max-width: 84px;
     }
 }
 
