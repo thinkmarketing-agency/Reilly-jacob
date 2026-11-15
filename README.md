@@ -1,199 +1,64 @@
-# Reilly & Jacob Wedding Website
+# Reilly & Jacob family album
 
-A modern, responsive wedding website with a warm, personal memory-board aesthetic featuring a corkboard background with pinned polaroid-style elements.
+This is the active project in the original repository. The old bulletin board, wedding registry page and sitemap have been retired. Existing photo files remain intact. Netlify publishes the repository root without a build, as specified in netlify.toml. The former registry URL redirects to the new homepage. Nothing has been pushed or deployed.
 
-## 🎨 Design Features
+## Workflow
 
-- **Corkboard Background**: High-resolution texture that scales to fill viewport
-- **Pinned Elements**: Polaroid-style photo cards with subtle rotation (±2–4°)
-- **Pushpin Details**: Red and brass thumbtacks at the top of cards
-- **Save the Date Card**: Primary focal element with elegant typography
-- **Responsive Design**: Mobile-first approach with stacked layout on smaller screens
-- **Minimal Animations**: Subtle hover effects and entrance animations
-- **Accessible**: High contrast, readable text, keyboard navigation support
+Both approved administrators have the same access from a phone or computer. Bulk uploads require no organization and go to a shared private inbox. Select photos, choose a chapter/collection, optionally add captions and tags, and press “Place & make live.” Returning photos to the inbox hides them again. Captions and tags can also be edited without changing placement. Chapters are freely named: Jamaica Wedding, Bend Wedding, Jamaica Week, Trafford, or anything else. Photos belong directly to chapters; there is no collection layer. The existing four destinations are retained and can be renamed. Holiday cards remain a separate future feature.
 
-## 📁 File Structure
+Both photo and destination visibility are enforced by database/storage policies. Private inbox files live in a private bucket. Visitor links expire in five minutes; an already issued link can work until then. Existing static photos used by the cover and Memories are public assets, independently of the Supabase inbox.
 
-```
-.
-├── index.html          # Main HTML structure
-├── styles.css          # All styling and responsive design
-├── script.js           # Minimal JavaScript for interactions
-└── README.md          # This file
-```
+## Local preview
 
-## 🚀 Getting Started
+Run `python3 -m http.server 8765` in this repository, then visit http://localhost:8765 and http://localhost:8765/admin/ . Until configured, admin reports that Supabase is not connected.
 
-### Local Development
+## Supabase setup
 
-1. **Clone or download** this repository
-2. **Open `index.html`** in a modern web browser
-3. No build process needed - pure HTML/CSS/JS
+1. Create a new, dedicated project at https://supabase.com/dashboard . Keep its database password private.
+2. Run supabase/001_family_album.sql once in that project's SQL editor. It creates administrator membership, albums, photos, four destination collections and a private photo bucket, with access rules. It has not been applied remotely.
+3. Disable “Allow new users to sign up” under Authentication settings. In Authentication → Users create two separate email/password users, one for Jacob and one for Reilly, using the dashboard's Create user option. Each needs a known password to use the current sign-in form. Invitation/password-setup and recovery screens are future work; do not send invitations until that flow is implemented.
+4. Copy each Auth user's UUID. In the SQL editor add each to family_admins:
 
-### Using a Local Server (Recommended)
+   insert into public.family_admins(user_id) values ('JACOB_AUTH_USER_UUID'), ('REILLY_AUTH_USER_UUID');
 
-For the best experience and to avoid CORS issues:
+   Replace the quoted placeholders with the actual UUIDs. No browser user can grant administrator access.
+5. Copy the project URL and publishable key from the project's Connect dialog into config.js. Never use a secret or service-role key in frontend files.
+6. Sign in as each user and complete the checks below before deployment.
 
-```bash
-# Using Python 3
-python3 -m http.server 8000
+## Acceptance checks before release
 
-# Using Node.js (with npx)
-npx http-server
+- Upload several photos without choosing a destination. They must appear in the private inbox for both administrators, with null album_id and published=false.
+- Use an anonymous client and an ordinary unapproved account. Both must be unable to write metadata or upload files. Neither may read inbox metadata, download known inbox object paths or generate links to them.
+- Place selected photos into a chapter: they must become visible publicly. Captions/tags must persist. Return them to inbox: public queries must stop returning them and new signed-link requests must fail.
+- Repeat on an iPhone and desktop. Check keyboard access, reduced motion, photo dialog close, unsupported files and partial-upload retry.
+- Test an expired/revoked administrator session and sign-out.
 
-# Using PHP
-php -S localhost:8000
-```
+## Current limits and verification
 
-Then visit `http://localhost:8000` in your browser.
+JavaScript syntax and original photo preservation have been checked. Browser preview is restricted in the execution environment. Live Supabase Auth, SQL and RLS checks require a configured project and have not run. No Netlify remote settings were accessible from the repository: verify its linked repository, branch, publish directory and custom domain before release.
 
-## 📝 Customization Guide
+Uploads currently accept JPEG, PNG and WebP up to 20 MB each. HEIC conversion, video, thumbnails, EXIF stripping, duplicate detection and pagination remain future work. Originals retain metadata; review them before making them live. Multi-select caption/tag saving replaces those fields on every selected photo, including empty fields.
 
-### Adding Your Own Photos
+No automatic deployment is performed. Once reviewed and tested, republishing through Netlify replaces the old experience.
 
-Replace the placeholder photo divs in `index.html`:
+## Chapter model update
 
-```html
-<!-- Replace this: -->
-<div class="photo-placeholder photo-1">
-    <span class="photo-label">Photo 1</span>
-</div>
+The existing `albums` rows are now the chapters themselves. Their IDs and photo placements are preserved. The legacy `chapter` column remains populated for compatibility with the already-applied database constraint, but is not used for grouping or displayed. No new SQL or re-upload is needed for this update. Public chapter cards are loaded from database records, rather than fixed categories. Creating or renaming a chapter uses its freely chosen title. “Place / move & make live” assigns selected photos directly to the chosen chapter.
 
-<!-- With this: -->
-<img src="path/to/your-photo.jpg" alt="Description" class="photo-image">
-```
+## Edit chapters
 
-Then add this CSS to `styles.css`:
+Each chapter now has its own name field, photo count, Save name and Delete chapter actions. Deletion requires a warning confirmation and calls an administrator-only database function. Run `supabase/002_chapter_management.sql` once in the Supabase SQL editor to enable it. The function locks the chapter, clears its photos' placement and publication, and deletes the chapter in a single transaction. It does not delete photos, tags, captions or storage objects. If any step fails, the entire operation rolls back.
 
-```css
-.photo-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-```
+Acceptance checks in a disposable chapter: rename and verify public title; cancel delete and verify no change; delete with both live and draft photos and verify all return to private inbox with their IDs, paths, tags and captions intact; verify anonymous and non-admin calls fail. The migration has been prepared but not applied or tested on the live database by the agent.
 
-### Changing the Corkboard Background
+## Individual captions and tags
 
-1. Find a high-resolution corkboard texture image (2000px+ width recommended)
-2. Update the URL in `styles.css` line 36:
+Bulk chapter assignment is separate from photo details. Open the main family album while signed in, open a photo and choose Edit caption & tags. Changes target that photo's ID only. Previous/Next controls let administrators work through a chapter. Public visitors and unapproved accounts do not receive editing controls; existing database RLS independently rejects their updates. Captions are displayed publicly; editing fields are private to administrators. No database migration is needed.
 
-```css
-.corkboard-container {
-    background: 
-        linear-gradient(rgba(201, 167, 106, 0.85), rgba(201, 167, 106, 0.85)),
-        url('YOUR_CORKBOARD_IMAGE_URL_HERE') center/cover no-repeat fixed;
-}
-```
+## Thumbnail framing and chapter covers
 
-**Recommended free image sources:**
-- [Unsplash](https://unsplash.com/s/photos/corkboard)
-- [Pexels](https://www.pexels.com/search/corkboard/)
-- [Pixabay](https://pixabay.com/images/search/cork-board/)
+Run `supabase/003_photo_framing.sql` once to add focal coordinates and chapter cover choices. In the main site, open a photo → Edit photo details to adjust horizontal/vertical framing with two previews, then save. This changes CSS crop positioning, not original file bytes. The same framing is used for photo thumbnails and chapter covers; the full photo viewer remains uncropped. Use Set as chapter cover on any live photo in that chapter. Moving/unpublishing the chosen photo clears its cover selection on the server and the chapter falls back to another live photo. Existing RLS restricts writes to family admins; a database trigger validates cover membership. Migration prepared but not yet applied or integration-tested.
 
-### Customizing Colors
+## Photo-led chapter browsing and search
 
-Edit CSS custom properties at the top of `styles.css`:
-
-```css
-:root {
-    --corkboard-bg: #c9a76a;      /* Main background color */
-    --card-white: #fefef8;         /* Card background */
-    --text-dark: #2c2c2c;          /* Main text color */
-    --text-light: #666;            /* Secondary text */
-    --pushpin-red: #c84545;        /* Red pushpin color */
-    --pushpin-brass: #b8860b;      /* Brass pushpin color */
-}
-```
-
-### Adding More Cards
-
-Copy and paste any card structure in `index.html` and adjust the `data-rotation` value:
-
-```html
-<div class="card polaroid" data-rotation="2">
-    <div class="pushpin pushpin-red"></div>
-    <div class="polaroid-frame">
-        <div class="photo-placeholder">
-            <span class="photo-label">Your Photo</span>
-        </div>
-        <div class="polaroid-caption">Your Caption</div>
-    </div>
-</div>
-```
-
-**Valid rotation values**: `-4, -3, -2, -1, 1, 2, 3, 4`
-
-## 🎯 Typography
-
-The site uses three Google Fonts:
-- **Dancing Script**: Script font for names and captions
-- **Playfair Display**: Elegant serif for headings and dates
-- **Lato**: Clean sans-serif for body text
-
-## 📱 Responsive Breakpoints
-
-- **Desktop**: 769px and above - Grid layout with multiple columns
-- **Tablet**: 481px to 768px - Reduced grid with adjusted spacing
-- **Mobile**: 480px and below - Single column, stacked cards
-
-## ⚡ Performance
-
-- No external dependencies (except Google Fonts)
-- Minimal JavaScript
-- CSS-only animations
-- Lazy loading support built-in for images
-- Total file size < 50KB (excluding images)
-
-## ♿ Accessibility Features
-
-- Semantic HTML5 structure
-- ARIA-compliant navigation
-- Keyboard navigation support
-- Focus indicators for interactive elements
-- Reduced motion support for users with motion sensitivity
-- High contrast text for readability
-- Print-friendly styles
-
-## 🌐 Browser Support
-
-Works on all modern browsers:
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
-
-## 📄 License
-
-This project is free to use and modify for personal wedding websites.
-
-## 🎉 Next Steps
-
-1. **Add your photos**: Replace placeholder images with your own
-2. **Customize text**: Update names, date, and location
-3. **Add detail pages**: Complete the Details, Travel, RSVP, and Registry sections
-4. **Test responsiveness**: Check on multiple devices
-5. **Deploy**: Host on GitHub Pages, Netlify, or your preferred platform
-
-## 🚢 Deployment Options
-
-### GitHub Pages
-1. Push this repo to GitHub
-2. Go to Settings → Pages
-3. Select your branch and root folder
-4. Your site will be live at `username.github.io/repo-name`
-
-### Netlify
-1. Drag and drop the folder to [Netlify Drop](https://app.netlify.com/drop)
-2. Your site is instantly deployed with a custom URL
-
-### Custom Domain
-Point your domain's DNS to your hosting provider:
-- For GitHub Pages: Create a CNAME file with your domain
-- For Netlify: Add custom domain in site settings
-
----
-
-**Questions or issues?** Feel free to modify and adapt this template to make it your own!
-
-🎊 Congratulations Reilly & Jacob! 🎊
+The inside now features large photographic chapter cards, an immersive chapter cover and a photo wall. Empty chapters appear as a quiet “More stories to come” list instead of dominating the screen with placeholders. Only existing published photos and chapters are used. Search matches tags and captions across all published photos, ignores case, and requires all entered words to match. Real tags supply suggestion chips; photo-viewer tags link back to search. Empty searches return to browsing. No database migration is needed.
