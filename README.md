@@ -62,3 +62,17 @@ Run `supabase/003_photo_framing.sql` once to add focal coordinates and chapter c
 ## Photo-led chapter browsing and search
 
 The inside now features large photographic chapter cards, an immersive chapter cover and a photo wall. Empty chapters appear as a quiet “More stories to come” list instead of dominating the screen with placeholders. Only existing published photos and chapters are used. Search matches tags and captions across all published photos, ignores case, and requires all entered words to match. Real tags supply suggestion chips; photo-viewer tags link back to search. Empty searches return to browsing. No database migration is needed.
+
+## Photo removal and permanent deletion
+
+In the main album viewer, approved admins can Remove from chapter. This sets album_id=null and published=false on that single photo; its caption, tags, framing and file are retained. Existing cover cleanup triggers clear any cover pointing to it.
+
+In the private inbox, select photos and choose Delete selected photos. A separate permanent-deletion warning must be confirmed. The database delete is guarded by both unpublished status and no chapter assignment, so concurrently placed photos are skipped. Only paths returned by that delete are removed from storage. Storage cleanup failures retain a browser-local retry queue and expose Retry file cleanup; orphaned files remain private. Database and object storage operations cannot share a transaction. A network disconnect after a committed database delete but before its response is received may require manual orphan cleanup. No SQL migration is required.
+
+## Phone photo viewer
+
+At phone widths, opening a photo shows an edge-to-edge viewer with the original uncropped photograph. Swipe left/right to navigate, swipe down to close, or tap to show caption, tags and navigation/admin tools. Controls start hidden; keyboard arrows and Escape still work. Editing tools use a scrollable overlay, and swiping is paused during editing or saving. Desktop keeps visible controls. Actual iPhone touch behavior still needs a device check. No SQL changes.
+
+## Shuffled Little Moments
+
+Little Moments now draws from all published photos in visible chapters. It starts with 12 shuffled photos and adds 12 more near the bottom (More moments is a keyboard-friendly fallback). Every photo appears once before the next shuffled cycle, with immediate repeats avoided between cycles when possible. The order is stable for this page visit and changes on refresh. Opening a stream photo uses that same growing order for desktop navigation or phone swipes; chapter galleries and tag-search results retain their own order. Rendering uses independent columns to append without reshuffling existing tiles. Published photo metadata is fetched in pages to avoid Supabase's default row cap. No SQL migration.

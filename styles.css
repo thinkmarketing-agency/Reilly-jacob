@@ -61,3 +61,32 @@
 .photo-wall.single-photo{columns:1;max-width:900px;margin-left:auto;margin-right:auto}.photo-wall.single-photo .moment img{max-height:none}.photo-wall.single-photo .moment-caption{display:block}
 
 .gallery-hero-copy>p:first-child{font-size:12px;letter-spacing:normal;color:#ffffffc9}
+
+.inbox-actions{margin:16px 0}#inbox-delete-note{font-size:13px;color:#777b80}#delete-inbox{max-width:520px}#delete-inbox p{line-height:1.6}#delete-inbox-error{color:#a52d28}.family-site .photo-navigation .danger{color:#a52d28}
+
+/* On phones the photograph is the interface. Tap reveals the tools. */
+#viewer-tools{display:contents}.viewer-stage{display:grid;place-items:center}.viewer-stage img{max-width:85vw}#viewer-count{display:block;text-align:center;font-size:11px;letter-spacing:1px;color:#93969a;margin:12px 0}.viewer-hint{display:none}.viewer-open{overflow:hidden}
+@media(max-width:760px){
+ .family-site #lightbox{position:fixed;inset:0;margin:0;width:100vw;height:100dvh;max-width:none;max-height:none;border:0;border-radius:0;padding:0;background:#080808;color:#fff;overflow:hidden;box-shadow:none;overscroll-behavior:none}
+ .family-site #lightbox .viewer-stage{width:100%;height:100%;position:relative;touch-action:none;outline:none;user-select:none;-webkit-user-select:none}
+ .family-site #lightbox #viewer-image{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;border-radius:0;pointer-events:none;-webkit-user-drag:none}
+ .family-site #lightbox #viewer-count{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:50%;transform:translateX(-50%);margin:0;padding:5px 9px;border-radius:12px;background:#0005;color:#ffffffa6;font-size:10px;pointer-events:none}
+ .family-site #lightbox #dismiss{position:absolute;right:16px;top:calc(env(safe-area-inset-top,0px) + 12px);z-index:4;margin:0;background:#222b;border-color:#ffffff30;color:white;font-size:12px;padding:10px 15px;backdrop-filter:blur(12px)}
+ .family-site #lightbox #viewer-tools{display:block;position:absolute;z-index:3;bottom:0;left:0;right:0;max-height:72dvh;overflow:auto;overscroll-behavior:contain;background:#111e;backdrop-filter:blur(22px);padding:12px 18px calc(env(safe-area-inset-bottom,0px) + 18px);border-radius:18px 18px 0 0}
+ .family-site #lightbox:not(.controls-visible) #dismiss,.family-site #lightbox:not(.controls-visible) #viewer-tools{display:none}
+ .family-site #lightbox .viewer-hint{display:block;position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 25px);left:0;right:0;text-align:center;color:#ffffffb3;font-size:11px;line-height:1.8;text-shadow:0 1px 8px #000;pointer-events:none;animation:hide-viewer-hint 5s forwards}
+ .family-site #lightbox.controls-visible .viewer-hint{display:none}
+ .family-site #lightbox .photo-navigation button,.family-site #lightbox .tag-chip{background:#ffffff0d;border-color:#ffffff24;color:#eee}
+ .family-site #lightbox .photo-navigation .danger{color:#ffb2a6}
+ .family-site #lightbox #photo-caption{margin-top:5px;color:white}
+ .family-site #lightbox #photo-editor{border-color:#ffffff24;max-width:none}
+ .family-site #lightbox #photo-editor input:not([type=range]),.family-site #lightbox textarea{background:#fff;color:#242424}
+ .family-site #lightbox .framing{border-color:#ffffff24}.family-site #lightbox .framing figcaption{color:#b7b7b7}
+ .family-site #lightbox #photo-editor button{color:#eee;background:#ffffff10;border-color:#ffffff24}
+ .family-site #lightbox #photo-editor .primary{background:#fff;color:#222}
+ .family-site #lightbox #photo-status{color:#ddd;font-size:12px}
+}
+@keyframes hide-viewer-hint{0%,65%{opacity:1}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.family-site #lightbox .viewer-hint{animation:none}}
+
+#recent-photos{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;columns:auto}.moment-column{display:flex;flex-direction:column;gap:18px;min-width:0}#recent-photos .moment{margin:0}#recent-photos .moment img{height:auto;max-height:none;aspect-ratio:auto}#recent-photos .moment:nth-child(3n+2) img{aspect-ratio:auto}#moments-sentinel{text-align:center;padding:25px 0 15px}#more-moments{font-size:12px;border-color:#eee;color:#878b90;background:transparent}@media(max-width:760px){#recent-photos{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.moment-column{gap:10px}}

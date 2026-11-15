@@ -1,10 +1,14 @@
+import {MomentStream,photoKey} from './moments.js?v=7';
+import {swipeAction} from './gestures.js?v=6';
+import {photoCaption} from './captions.js?v=5';
+import {returnPhotoToInbox} from './photo-actions.js?v=3';
 import {backend,check,imageURL,installImageRefresh} from './api.js?v=2';
 import {findPhotos,popularTags} from './search.js';
 let chapters=[],photos=[];
 let db=null,admin=false,currentPhoto=null,activePhotos=[],photoIndex=0,saving=false,covers=new Map(),activeChapter=null;
 const $=s=>document.querySelector(s);
 const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
-let opening=false;
+let opening=false;const momentStream=new MomentStream();let momentColumns=0,momentsRendered=0,activeSource='gallery';
 function openAlbum(animate=true){
  if(opening)return;opening=true;
  if(animate)document.body.classList.add('opening');
@@ -39,8 +43,8 @@ function render(){
   card.append(copy,el('span','chapter-arrow','↗'));card.onclick=()=>show(id);grid.append(card);populated++;
  }
  grid.classList.toggle('single-chapter',populated===1);$('#upcoming').hidden=!empty;
- $('#recent').hidden=photos.length<2;
- if(photos.length>=2)photoWall($('#recent-photos'),photos.slice(-9).reverse());
+ $('#recent').hidden=!photos.length;
+ momentStream.sync(photos);if(photos.length)momentStream.ensure(Math.max(12,momentStream.items.length));renderMoments(true);
  const suggestions=$('#tag-suggestions');suggestions.replaceChildren();
  for(const tag of popularTags(photos)){const button=el('button','tag-chip',tag);button.onclick=()=>searchFor(tag);suggestions.append(button)}
  applySearch();
@@ -54,15 +58,32 @@ function applySearch(){const query=$('#tag-search').value.trim();$('#browse').hi
 function searchFor(tag){$('#tag-search').value=tag;returnToChapters(false);applySearch();$('#tag-search').focus();$('#chapter-overview').scrollIntoView({behavior:reduced()?'instant':'smooth'})}
 $('#tag-search').oninput=applySearch;$('#search-form').onsubmit=e=>{e.preventDefault();applySearch()};$('#clear-search').onclick=()=>{$('#tag-search').value='';applySearch();$('#tag-search').focus()};
 function renderPhotoTags(){const container=$('#photo-tags');container.replaceChildren();for(const tag of currentPhoto.tags||[]){const button=el('button','tag-chip',tag);button.onclick=()=>{if(discardEdits()){$('#lightbox').close();searchFor(tag)}};container.append(button)}}
+function renderMoments(reset=false){
+ const count=matchMedia('(max-width:760px)').matches?2:3;
+ const root=$('#recent-photos');
+ if(reset||count!==momentColumns){root.replaceChildren();momentColumns=count;momentsRendered=0;for(let i=0;i<count;i++)root.append(el('div','moment-column'))}
+ for(let index=momentsRendered;index<momentStream.items.length;index++){
+  const photo=momentStream.items[index],button=el('button','moment');button.dataset.momentIndex=index;button.dataset.photoKey=photoKey(photo);button.setAttribute('aria-label',photo.caption||'Open photo');
+  const image=el('img');image.dataset.photoPath=photo.path||'';image.src=photo.url;image.alt=photo.caption||'Family memory';image.loading='lazy';image.style.objectPosition=position(photo);button.append(image);
+  if(photo.caption)button.append(el('span','moment-caption',photo.caption));button.onclick=()=>openPhoto(momentStream.items,index,'moments');root.children[index%count].append(button);
+ }
+ momentsRendered=momentStream.items.length;
+}
+function moreMoments(){if(!photos.length)return;momentStream.ensure(momentStream.items.length+12);renderMoments();$('#moments-status').textContent=`${momentStream.items.length} shuffled moments ready to explore.`}
+$('#more-moments').onclick=moreMoments;
+if('IntersectionObserver' in window){const observer=new IntersectionObserver(entries=>{
+ if(entries.some(entry=>entry.isIntersecting)&&!$('#collection').hidden&&!$('#chapter-overview').hidden&&!$('#browse').hidden&&!$('#lightbox').open)moreMoments();
+},{rootMargin:'500px 0px'});observer.observe($('#moments-sentinel'))}
+window.addEventListener('resize',()=>{if(momentStream.items.length)renderMoments()});
 $('#collection-status').textContent='Opening the album…';
 try{
  db=await backend();
  if(db){
   installImageRefresh(document,db);
   const albums=check(await db.from('albums').select('*').eq('published',true).order('created_at'));
-  const rows=check(await db.from('photos').select('*').eq('published',true).order('created_at'));
+  const rows=[];for(let from=0;;from+=500){const page=check(await db.from('photos').select('*').eq('published',true).order('created_at').order('id').range(from,from+499));rows.push(...page);if(page.length<500)break}
   const visible=new Set(albums.map(a=>a.id));
-  photos=await Promise.all(rows.filter(p=>visible.has(p.album_id)).map(async p=>({...p,chapter:p.album_id,url:await imageURL(db,p.path)})));
+  photos=await Promise.all(rows.filter(p=>visible.has(p.album_id)).map(async p=>({...p,caption:photoCaption(p.caption),chapter:p.album_id,url:await imageURL(db,p.path)})));
   chapters=albums.map(a=>[a.id,a.title]);covers=new Map(albums.map(a=>[a.id,a.cover_photo_id]));await checkAdmin();
  }else{
   chapters=[['local-memories','Memories']];photos=Array.from({length:15},(_,i)=>({caption:'Reilly & Jacob · Memory '+(i+1),url:`assets/images/jr${i+1}.jpeg`,chapter:'local-memories',tags:[]}));
@@ -73,16 +94,16 @@ try{
 function dirty(){return !$('#photo-editor').hidden && currentPhoto && ($('#edit-caption').value!==currentPhoto.caption || $('#edit-tags').value!==(currentPhoto.tags||[]).join(', ') || Number($('#focal-x').value)!==(currentPhoto.focal_x??50) || Number($('#focal-y').value)!==(currentPhoto.focal_y??50))}
 function discardEdits(){return !saving && (!dirty() || confirm('Discard your unsaved photo details?'))}
 function displayPhoto(){
- currentPhoto=activePhotos[photoIndex];
- $('#lightbox img').dataset.photoPath=currentPhoto.path||'';$('#lightbox img').src=currentPhoto.url;$('#lightbox img').alt=currentPhoto.caption||'Family memory';
+ if(activeSource==='moments'){momentStream.ensure(photoIndex+4);renderMoments()}currentPhoto=activePhotos[photoIndex];$('#viewer-count').textContent=activeSource==='moments'?`Moment ${photoIndex+1}`:`${photoIndex+1} / ${activePhotos.length}`;
+ $('#viewer-image').dataset.photoPath=currentPhoto.path||'';$('#viewer-image').src=currentPhoto.url;$('#viewer-image').alt=currentPhoto.caption||'Family memory';
  $('#photo-caption').textContent=currentPhoto.caption;renderPhotoTags();
  $('#photo-status').textContent='';$('#photo-editor').hidden=true;
  $('#edit-photo').hidden=!admin||!currentPhoto.id;updateCoverButton();
- $('#previous-photo').disabled=photoIndex===0;$('#next-photo').disabled=photoIndex===activePhotos.length-1;
+ $('#previous-photo').disabled=photoIndex===0;$('#next-photo').disabled=activeSource!=='moments'&&photoIndex===activePhotos.length-1;
 }
-function openPhoto(items,index){activePhotos=items;photoIndex=index;displayPhoto();$('#lightbox').showModal()}
-$('#previous-photo').onclick=()=>{if(photoIndex>0&&discardEdits()){photoIndex--;displayPhoto()}};
-$('#next-photo').onclick=()=>{if(photoIndex<activePhotos.length-1&&discardEdits()){photoIndex++;displayPhoto()}};
+function openPhoto(items,index,source='gallery'){activeSource=source;activePhotos=items;photoIndex=index;displayPhoto();$('#lightbox').classList.remove('controls-visible');$('#lightbox').showModal();document.body.classList.add('viewer-open');if(matchMedia('(max-width:760px)').matches)$('#viewer-stage').focus({preventScroll:true})}
+$('#previous-photo').onclick=()=>navigatePhoto('previous');
+$('#next-photo').onclick=()=>navigatePhoto('next');
 $('#lightbox').addEventListener('cancel',e=>{if(!discardEdits())e.preventDefault()});
 $('#edit-photo').onclick=()=>{if(!admin||!currentPhoto?.id)return;$('#edit-caption').value=currentPhoto.caption||'';$('#edit-tags').value=(currentPhoto.tags||[]).join(', ');$('#focal-x').value=currentPhoto.focal_x??50;$('#focal-y').value=currentPhoto.focal_y??50;$('#thumbnail-preview').src=currentPhoto.url;$('#cover-preview').src=currentPhoto.url;previewFrame();$('#photo-editor').hidden=false;$('#edit-photo').hidden=true;$('#edit-caption').focus()};
 $('#cancel-edit').onclick=()=>{if(discardEdits()){$('#photo-editor').hidden=true;$('#edit-photo').hidden=!admin;$('#photo-status').textContent=''}};
@@ -104,10 +125,10 @@ $('#photo-editor').onsubmit=async e=>{
   // Update exactly this photo. RLS independently enforces administrator membership.
   const rows=check(await db.from('photos').update(values).eq('id',target.id).select('*'));
   if(rows.length!==1)throw Error('This photo could not be updated. Refresh and try again.');
-  Object.assign(target,rows[0]);render();if(activeChapter)renderGallery(activeChapter);renderPhotoTags();$('#photo-caption').textContent=target.caption;$('#lightbox img').alt=target.caption||'Family memory';
+  Object.assign(target,rows[0]);render();if(activeChapter)renderGallery(activeChapter);renderPhotoTags();$('#photo-caption').textContent=target.caption;$('#viewer-image').alt=target.caption||'Family memory';
   $('#photo-editor').hidden=true;$('#edit-photo').hidden=false;$('#photo-status').textContent='Photo details saved.';
  }catch(error){$('#photo-status').textContent=(error.code==='PGRST204'?'Run 003_photo_framing.sql in Supabase to enable saved framing.':error.message)||'Could not save. Please try again.'}
- finally{saving=false;controls.forEach(c=>c.disabled=false);$('#previous-photo').disabled=photoIndex===0;$('#next-photo').disabled=photoIndex===activePhotos.length-1}
+ finally{saving=false;controls.forEach(c=>c.disabled=false);$('#previous-photo').disabled=photoIndex===0;$('#next-photo').disabled=activeSource!=='moments'&&photoIndex===activePhotos.length-1}
 };
 window.addEventListener('focus',()=>{if(!saving)checkAdmin().catch(()=>{admin=false;$('#photo-editor').hidden=true;$('#edit-photo').hidden=true})});
 window.addEventListener('beforeunload',e=>{if(dirty()){e.preventDefault();e.returnValue=''}});
@@ -116,7 +137,7 @@ function position(photo){return `${photo.focal_x??50}% ${photo.focal_y??50}%`}
 function previewFrame(){const value=`${$('#focal-x').value}% ${$('#focal-y').value}%`;$('#thumbnail-preview').style.objectPosition=value;$('#cover-preview').style.objectPosition=value}
 $('#focal-x').oninput=previewFrame;$('#focal-y').oninput=previewFrame;
 $('#reset-frame').onclick=()=>{$('#focal-x').value=50;$('#focal-y').value=50;previewFrame()};
-function updateCoverButton(){const button=$('#set-cover');button.hidden=!admin||!currentPhoto?.id;button.textContent=currentPhoto&&covers.get(currentPhoto.chapter)===currentPhoto.id?'Current chapter cover':'Set as chapter cover'}
+function updateCoverButton(){$('#remove-photo').hidden=!admin||!currentPhoto?.id;const button=$('#set-cover');button.hidden=!admin||!currentPhoto?.id;button.textContent=currentPhoto&&covers.get(currentPhoto.chapter)===currentPhoto.id?'Current chapter cover':'Set as chapter cover'}
 $('#set-cover').onclick=async()=>{
  if(saving||!currentPhoto?.id)return;if(dirty()){$('#photo-status').textContent='Save or cancel your photo edits before setting the cover.';return}
  saving=true;$('#set-cover').disabled=true;
@@ -126,3 +147,45 @@ $('#set-cover').onclick=async()=>{
  }catch(error){$('#photo-status').textContent=error.code==='PGRST204'?'Run 003_photo_framing.sql in Supabase to enable chapter covers.':error.message}
  finally{saving=false;$('#set-cover').disabled=false}
 };
+
+$('#remove-photo').onclick=async()=>{
+ if(saving||!currentPhoto?.id||!discardEdits())return;
+ if(!confirm('Remove this photo from its chapter? It will return to the private inbox with its caption and tags intact. No image file will be deleted.'))return;
+ saving=true;const target=currentPhoto;const controls=[...$('#lightbox').querySelectorAll('button,input,textarea')];controls.forEach(control=>control.disabled=true);
+ try{
+  await checkAdmin();if(!admin)throw Error('Sign in with your family account to remove photos.');
+  await returnPhotoToInbox(db,target.id);
+  photos=photos.filter(photo=>photo.id!==target.id);
+  for(const [chapter,id] of covers)if(id===target.id)covers.delete(chapter);
+  $('#photo-editor').hidden=true;$('#lightbox').close();currentPhoto=null;activePhotos=[];
+  render();if(activeChapter)renderGallery(activeChapter);
+  const status=activeChapter?$('#gallery-note'):$('#collection-status');status.textContent='Photo returned to the private inbox. Its caption and tags are kept.';
+  (activeChapter?$('#back'):$('#tag-search')).focus({preventScroll:true});
+ }catch(error){$('#photo-status').textContent=error.message||'Could not remove the photo. Please try again.'}
+ finally{saving=false;controls.forEach(control=>control.disabled=false);if(currentPhoto){$('#previous-photo').disabled=photoIndex===0;$('#next-photo').disabled=activeSource!=='moments'&&photoIndex===activePhotos.length-1}}
+};
+
+const phoneViewer=()=>matchMedia('(max-width:760px)').matches;
+function navigatePhoto(direction){if(saving||!$('#photo-editor').hidden)return;if(activeSource==='moments'&&direction==='next'){momentStream.ensure(photoIndex+2);renderMoments()}const next=photoIndex+(direction==='next'?1:-1);if(next>=0&&next<activePhotos.length&&discardEdits()){photoIndex=next;displayPhoto()}}
+let gesture=null,ignoreTap=false;
+$('#viewer-stage').addEventListener('pointerdown',event=>{
+ if(!phoneViewer()||saving||!$('#photo-editor').hidden||!event.isPrimary)return;
+ gesture={x:event.clientX,y:event.clientY,id:event.pointerId};ignoreTap=false;
+ event.currentTarget.setPointerCapture(event.pointerId);
+});
+$('#viewer-stage').addEventListener('pointerup',event=>{
+ if(!gesture||gesture.id!==event.pointerId)return;
+ const dx=event.clientX-gesture.x,dy=event.clientY-gesture.y;gesture=null;
+ ignoreTap=Math.abs(dx)>12||Math.abs(dy)>12;
+ const action=swipeAction(dx,dy);
+ if(action==='close'){if(discardEdits())$('#lightbox').close()}
+ else if(action)navigatePhoto(action);
+});
+$('#viewer-stage').addEventListener('pointercancel',()=>{gesture=null;ignoreTap=true});
+$('#viewer-stage').addEventListener('click',()=>{if(phoneViewer()&&!saving&&!ignoreTap&&$('#photo-editor').hidden)$('#lightbox').classList.toggle('controls-visible');ignoreTap=false});
+$('#lightbox').addEventListener('keydown',event=>{
+ if(/^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)||!$('#photo-editor').hidden)return;
+ if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();navigatePhoto(event.key==='ArrowRight'?'next':'previous')}
+ if(event.key===' '&&event.target===$('#viewer-stage')){event.preventDefault();$('#lightbox').classList.toggle('controls-visible')}
+});
+$('#lightbox').addEventListener('close',()=>{document.body.classList.remove('viewer-open');gesture=null});
