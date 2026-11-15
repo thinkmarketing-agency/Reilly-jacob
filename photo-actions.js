@@ -7,7 +7,7 @@ export async function deleteInboxRecords(db,ids){
  if(!ids.length)throw Error('Select at least one inbox photo.');
  // These conditions are evaluated by the database at deletion time. A photo
  // published or placed by the other administrator is skipped, not deleted.
- return check(await db.from('photos').delete().in('id',ids).eq('published',false).is('album_id',null).select('id,path'));
+ return check(await db.from('photos').delete().in('id',ids).eq('published',false).is('album_id',null).select('*'));
 }
 export async function removeStoredFiles(db,paths){
  for(let start=0;start<paths.length;start+=100){

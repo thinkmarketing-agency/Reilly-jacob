@@ -1,5 +1,5 @@
 import {MomentStream,photoKey} from './moments.js?v=7';
-import {swipeAction} from './gestures.js?v=6';
+import {swipeAction,clampZoom,clampPan} from './gestures.js?v=9';
 import {photoCaption} from './captions.js?v=5';
 import {returnPhotoToInbox} from './photo-actions.js?v=3';
 import {backend,check,imageURL,installImageRefresh} from './api.js?v=2';
@@ -49,7 +49,7 @@ function render(){
  for(const tag of popularTags(photos)){const button=el('button','tag-chip',tag);button.onclick=()=>searchFor(tag);suggestions.append(button)}
  applySearch();
 }
-function photoWall(container,items){container.classList.toggle('single-photo',items.length===1);container.replaceChildren();for(const photo of items){const button=el('button','moment');button.setAttribute('aria-label',photo.caption||'Open photo');const image=el('img');image.dataset.photoPath=photo.path||'';image.src=photo.url;image.alt=photo.caption||'Family memory';image.loading='lazy';image.style.objectPosition=position(photo);image.dataset.photoId=photo.id||'';button.append(image);if(photo.caption)button.append(el('span','moment-caption',photo.caption));button.onclick=()=>openPhoto(items,items.indexOf(photo));container.append(button)}}
+function photoWall(container,items){container.classList.toggle('single-photo',items.length===1);container.replaceChildren();for(const photo of items){const button=el('button','moment');button.setAttribute('aria-label',photo.caption||'Open photo');const image=el('img');image.dataset.photoPath=photo.thumbnail_path||photo.path||'';image.src=photo.thumbUrl||photo.url;image.alt=photo.caption||'Family memory';image.loading='lazy';image.style.objectPosition=position(photo);image.dataset.photoId=photo.id||'';button.append(image);if(photo.caption)button.append(el('span','moment-caption',photo.caption));button.onclick=()=>openPhoto(items,items.indexOf(photo));container.append(button)}}
 function renderGallery(id){const chapter=chapters.find(c=>c[0]===id);if(!chapter)return;const items=chapterPhotos(id),hero=heroPhoto(id);$('#gallery-title').textContent=chapter[1];$('#gallery-note').textContent=items.length?`${items.length} ${items.length===1?'moment':'moments'} worth keeping.`:'The next story starts here.';$('#gallery-cover').hidden=!hero;$('.gallery-hero').classList.toggle('is-empty',!hero);if(hero){$('#gallery-cover').dataset.photoPath=hero.path||'';$('#gallery-cover').src=hero.url;$('#gallery-cover').style.objectPosition=position(hero)}photoWall($('#photos'),items)}
 function show(id){activeChapter=id;$('#chapter-overview').hidden=true;$('#gallery').hidden=false;renderGallery(id);window.scrollTo({top:0,behavior:reduced()?'instant':'smooth'});$('#back').focus({preventScroll:true})}
 function returnToChapters(focus=true){const previous=activeChapter;activeChapter=null;$('#gallery').hidden=true;$('#chapter-overview').hidden=false;if(focus){const card=[...$('#chapters').querySelectorAll('button')].find(b=>b.dataset.chapterId===previous);(card||$('#tag-search')).focus();}}
@@ -64,7 +64,7 @@ function renderMoments(reset=false){
  if(reset||count!==momentColumns){root.replaceChildren();momentColumns=count;momentsRendered=0;for(let i=0;i<count;i++)root.append(el('div','moment-column'))}
  for(let index=momentsRendered;index<momentStream.items.length;index++){
   const photo=momentStream.items[index],button=el('button','moment');button.dataset.momentIndex=index;button.dataset.photoKey=photoKey(photo);button.setAttribute('aria-label',photo.caption||'Open photo');
-  const image=el('img');image.dataset.photoPath=photo.path||'';image.src=photo.url;image.alt=photo.caption||'Family memory';image.loading='lazy';image.style.objectPosition=position(photo);button.append(image);
+  const image=el('img');image.dataset.photoPath=photo.thumbnail_path||photo.path||'';image.src=photo.thumbUrl||photo.url;image.alt=photo.caption||'Family memory';image.loading='lazy';image.style.objectPosition=position(photo);button.append(image);
   if(photo.caption)button.append(el('span','moment-caption',photo.caption));button.onclick=()=>openPhoto(momentStream.items,index,'moments');root.children[index%count].append(button);
  }
  momentsRendered=momentStream.items.length;
@@ -83,7 +83,7 @@ try{
   const albums=check(await db.from('albums').select('*').eq('published',true).order('created_at'));
   const rows=[];for(let from=0;;from+=500){const page=check(await db.from('photos').select('*').eq('published',true).order('created_at').order('id').range(from,from+499));rows.push(...page);if(page.length<500)break}
   const visible=new Set(albums.map(a=>a.id));
-  photos=await Promise.all(rows.filter(p=>visible.has(p.album_id)).map(async p=>({...p,caption:photoCaption(p.caption),chapter:p.album_id,url:await imageURL(db,p.path)})));
+  photos=await Promise.all(rows.filter(p=>visible.has(p.album_id)).map(async p=>({...p,caption:photoCaption(p.caption),chapter:p.album_id,url:await imageURL(db,p.path),thumbUrl:p.thumbnail_path?await imageURL(db,p.thumbnail_path):null})));
   chapters=albums.map(a=>[a.id,a.title]);covers=new Map(albums.map(a=>[a.id,a.cover_photo_id]));await checkAdmin();
  }else{
   chapters=[['local-memories','Memories']];photos=Array.from({length:15},(_,i)=>({caption:'Reilly & Jacob · Memory '+(i+1),url:`assets/images/jr${i+1}.jpeg`,chapter:'local-memories',tags:[]}));
@@ -94,18 +94,18 @@ try{
 function dirty(){return !$('#photo-editor').hidden && currentPhoto && ($('#edit-caption').value!==currentPhoto.caption || $('#edit-tags').value!==(currentPhoto.tags||[]).join(', ') || Number($('#focal-x').value)!==(currentPhoto.focal_x??50) || Number($('#focal-y').value)!==(currentPhoto.focal_y??50))}
 function discardEdits(){return !saving && (!dirty() || confirm('Discard your unsaved photo details?'))}
 function displayPhoto(){
- if(activeSource==='moments'){momentStream.ensure(photoIndex+4);renderMoments()}currentPhoto=activePhotos[photoIndex];$('#viewer-count').textContent=activeSource==='moments'?`Moment ${photoIndex+1}`:`${photoIndex+1} / ${activePhotos.length}`;
+ if(activeSource==='moments'){momentStream.ensure(photoIndex+4);renderMoments()}currentPhoto=activePhotos[photoIndex];resetPhotoZoom();$('#viewer-count').textContent=activeSource==='moments'?`Moment ${photoIndex+1}`:`${photoIndex+1} / ${activePhotos.length}`;
  $('#viewer-image').dataset.photoPath=currentPhoto.path||'';$('#viewer-image').src=currentPhoto.url;$('#viewer-image').alt=currentPhoto.caption||'Family memory';
  $('#photo-caption').textContent=currentPhoto.caption;renderPhotoTags();
  $('#photo-status').textContent='';$('#photo-editor').hidden=true;
  $('#edit-photo').hidden=!admin||!currentPhoto.id;updateCoverButton();
  $('#previous-photo').disabled=photoIndex===0;$('#next-photo').disabled=activeSource!=='moments'&&photoIndex===activePhotos.length-1;
 }
-function openPhoto(items,index,source='gallery'){activeSource=source;activePhotos=items;photoIndex=index;displayPhoto();$('#lightbox').classList.remove('controls-visible');$('#lightbox').showModal();document.body.classList.add('viewer-open');if(matchMedia('(max-width:760px)').matches)$('#viewer-stage').focus({preventScroll:true})}
+function openPhoto(items,index,source='gallery'){activeSource=source;activePhotos=items;photoIndex=index;displayPhoto();$('#lightbox').classList.remove('controls-visible');$('#lightbox').showModal();fitViewer();document.body.classList.add('viewer-open');if(phoneViewer())$('#viewer-stage').focus({preventScroll:true})}
 $('#previous-photo').onclick=()=>navigatePhoto('previous');
 $('#next-photo').onclick=()=>navigatePhoto('next');
 $('#lightbox').addEventListener('cancel',e=>{if(!discardEdits())e.preventDefault()});
-$('#edit-photo').onclick=()=>{if(!admin||!currentPhoto?.id)return;$('#edit-caption').value=currentPhoto.caption||'';$('#edit-tags').value=(currentPhoto.tags||[]).join(', ');$('#focal-x').value=currentPhoto.focal_x??50;$('#focal-y').value=currentPhoto.focal_y??50;$('#thumbnail-preview').src=currentPhoto.url;$('#cover-preview').src=currentPhoto.url;previewFrame();$('#photo-editor').hidden=false;$('#edit-photo').hidden=true;$('#edit-caption').focus()};
+$('#edit-photo').onclick=()=>{if(!admin||!currentPhoto?.id)return;$('#edit-caption').value=currentPhoto.caption||'';$('#edit-tags').value=(currentPhoto.tags||[]).join(', ');$('#focal-x').value=currentPhoto.focal_x??50;$('#focal-y').value=currentPhoto.focal_y??50;$('#thumbnail-preview').src=currentPhoto.thumbUrl||currentPhoto.url;$('#cover-preview').src=currentPhoto.thumbUrl||currentPhoto.url;previewFrame();$('#photo-editor').hidden=false;$('#edit-photo').hidden=true;$('#edit-caption').focus()};
 $('#cancel-edit').onclick=()=>{if(discardEdits()){$('#photo-editor').hidden=true;$('#edit-photo').hidden=!admin;$('#photo-status').textContent=''}};
 async function checkAdmin(){
  admin=false;
@@ -165,27 +165,85 @@ $('#remove-photo').onclick=async()=>{
  finally{saving=false;controls.forEach(control=>control.disabled=false);if(currentPhoto){$('#previous-photo').disabled=photoIndex===0;$('#next-photo').disabled=activeSource!=='moments'&&photoIndex===activePhotos.length-1}}
 };
 
-const phoneViewer=()=>matchMedia('(max-width:760px)').matches;
-function navigatePhoto(direction){if(saving||!$('#photo-editor').hidden)return;if(activeSource==='moments'&&direction==='next'){momentStream.ensure(photoIndex+2);renderMoments()}const next=photoIndex+(direction==='next'?1:-1);if(next>=0&&next<activePhotos.length&&discardEdits()){photoIndex=next;displayPhoto()}}
-let gesture=null,ignoreTap=false;
+
+const phoneViewer=()=>matchMedia('(max-width:760px), (hover:none) and (pointer:coarse), (max-height:500px) and (max-width:1000px)').matches;
+function navigatePhoto(direction){if(saving||!$('#photo-editor').hidden||photoZoom>1.02)return;if(activeSource==='moments'&&direction==='next'){momentStream.ensure(photoIndex+2);renderMoments()}const next=photoIndex+(direction==='next'?1:-1);if(next>=0&&next<activePhotos.length&&discardEdits()){photoIndex=next;displayPhoto()}}
+let photoZoom=1,panX=0,panY=0,gesture=null,pinch=null,ignoreTap=false,lastTap=0,tapTimer=null;
+const pointers=new Map();
+function applyPhotoZoom(){
+ const stage=$('#viewer-stage'),image=$('#viewer-image');
+ const pan=clampPan(panX,panY,photoZoom,stage.clientWidth,stage.clientHeight,image.naturalWidth,image.naturalHeight);panX=pan.x;panY=pan.y;
+ image.style.transform=`translate3d(${panX}px,${panY}px,0) scale(${photoZoom})`;
+ $('#lightbox').classList.toggle('photo-zoomed',photoZoom>1.02);
+ $('#reset-photo-zoom').hidden=photoZoom<=1.02;
+}
+function resetPhotoZoom(){photoZoom=1;panX=0;panY=0;pointers.clear();gesture=null;pinch=null;applyPhotoZoom()}
+function togglePhotoZoom(){
+ if(!phoneViewer()||saving||!$('#photo-editor').hidden)return;
+ if(photoZoom>1.02)resetPhotoZoom();else{photoZoom=2.5;$('#lightbox').classList.remove('controls-visible');applyPhotoZoom()}
+}
+function touchPair(){const [a,b]=[...pointers.values()];return {distance:Math.hypot(a.x-b.x,a.y-b.y),x:(a.x+b.x)/2,y:(a.y+b.y)/2}}
+function beginPinch(){const pair=touchPair(),rect=$('#viewer-stage').getBoundingClientRect();pinch={distance:Math.max(1,pair.distance),zoom:photoZoom,x:panX,y:panY,anchorX:pair.x-rect.left-rect.width/2,anchorY:pair.y-rect.top-rect.height/2};gesture=null;ignoreTap=true;clearTimeout(tapTimer);lastTap=0}
 $('#viewer-stage').addEventListener('pointerdown',event=>{
- if(!phoneViewer()||saving||!$('#photo-editor').hidden||!event.isPrimary)return;
- gesture={x:event.clientX,y:event.clientY,id:event.pointerId};ignoreTap=false;
- event.currentTarget.setPointerCapture(event.pointerId);
+ if(!phoneViewer()||saving||!$('#photo-editor').hidden)return;
+ pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});event.currentTarget.setPointerCapture(event.pointerId);
+ if(pointers.size===1){gesture={x:event.clientX,y:event.clientY,id:event.pointerId,panX,panY,zoom:photoZoom};ignoreTap=false}
+ else if(pointers.size===2)beginPinch();
+});
+$('#viewer-stage').addEventListener('pointermove',event=>{
+ if(!pointers.has(event.pointerId))return;
+ pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+ if(pointers.size>=2&&pinch){
+  const pair=touchPair(),rect=$('#viewer-stage').getBoundingClientRect();photoZoom=clampZoom(pinch.zoom*pair.distance/pinch.distance);
+  const ratio=photoZoom/pinch.zoom;
+  panX=pair.x-rect.left-rect.width/2-(pinch.anchorX-pinch.x)*ratio;
+  panY=pair.y-rect.top-rect.height/2-(pinch.anchorY-pinch.y)*ratio;
+  $('#lightbox').classList.remove('controls-visible');applyPhotoZoom();return;
+ }
+ if(gesture&&photoZoom>1.02){panX=gesture.panX+event.clientX-gesture.x;panY=gesture.panY+event.clientY-gesture.y;if(Math.abs(event.clientX-gesture.x)>8||Math.abs(event.clientY-gesture.y)>8)ignoreTap=true;applyPhotoZoom()}
 });
 $('#viewer-stage').addEventListener('pointerup',event=>{
+ if(!pointers.has(event.pointerId))return;
+ pointers.delete(event.pointerId);
+ if(pinch){
+  ignoreTap=true;
+  if(pointers.size===1){const [id,point]=[...pointers.entries()][0];gesture={x:point.x,y:point.y,id,panX,panY,zoom:photoZoom}}else gesture=null;
+  pinch=null;return;
+ }
  if(!gesture||gesture.id!==event.pointerId)return;
- const dx=event.clientX-gesture.x,dy=event.clientY-gesture.y;gesture=null;
- ignoreTap=Math.abs(dx)>12||Math.abs(dy)>12;
+ const dx=event.clientX-gesture.x,dy=event.clientY-gesture.y,startedZoomed=gesture.zoom>1.02;gesture=null;
+ ignoreTap=ignoreTap||Math.abs(dx)>12||Math.abs(dy)>12;
+ if(startedZoomed||photoZoom>1.02)return;
  const action=swipeAction(dx,dy);
  if(action==='close'){if(discardEdits())$('#lightbox').close()}
  else if(action)navigatePhoto(action);
 });
-$('#viewer-stage').addEventListener('pointercancel',()=>{gesture=null;ignoreTap=true});
-$('#viewer-stage').addEventListener('click',()=>{if(phoneViewer()&&!saving&&!ignoreTap&&$('#photo-editor').hidden)$('#lightbox').classList.toggle('controls-visible');ignoreTap=false});
+$('#viewer-stage').addEventListener('pointercancel',()=>{pointers.clear();gesture=null;pinch=null;ignoreTap=true});
+$('#viewer-stage').addEventListener('click',()=>{
+ if(!phoneViewer()||saving||!$('#photo-editor').hidden)return;
+ if(ignoreTap){ignoreTap=false;return}
+ const now=Date.now();
+ if(now-lastTap<300){clearTimeout(tapTimer);lastTap=0;togglePhotoZoom()}
+ else{lastTap=now;clearTimeout(tapTimer);tapTimer=setTimeout(()=>{if($('#lightbox').open)$('#lightbox').classList.toggle('controls-visible')},300)}
+});
+$('#viewer-stage').addEventListener('dblclick',event=>event.preventDefault());
+$('#reset-photo-zoom').onclick=resetPhotoZoom;
+$('#viewer-image').addEventListener('load',applyPhotoZoom);
 $('#lightbox').addEventListener('keydown',event=>{
  if(/^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)||!$('#photo-editor').hidden)return;
  if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();navigatePhoto(event.key==='ArrowRight'?'next':'previous')}
  if(event.key===' '&&event.target===$('#viewer-stage')){event.preventDefault();$('#lightbox').classList.toggle('controls-visible')}
+ if(event.key==='0')resetPhotoZoom();
 });
-$('#lightbox').addEventListener('close',()=>{document.body.classList.remove('viewer-open');gesture=null});
+$('#lightbox').addEventListener('close',()=>{document.body.classList.remove('viewer-open');clearTimeout(tapTimer);resetPhotoZoom()});
+let orientationKey=`${screen.orientation?.type||''}:${innerWidth>innerHeight}`;
+function fitViewer(){
+ const viewport=window.visualViewport,dialog=$('#lightbox');
+ dialog.style.setProperty('--viewer-height',`${viewport?.height||innerHeight}px`);
+ dialog.style.setProperty('--viewer-width',`${viewport?.width||innerWidth}px`);
+ dialog.style.setProperty('--viewer-top',`${viewport?.offsetTop||0}px`);dialog.style.setProperty('--viewer-left',`${viewport?.offsetLeft||0}px`);
+ const nextKey=`${screen.orientation?.type||''}:${innerWidth>innerHeight}`;
+ if(nextKey!==orientationKey){orientationKey=nextKey;if(dialog.open)resetPhotoZoom()}
+ if(!phoneViewer()&&photoZoom>1)resetPhotoZoom();else applyPhotoZoom();
+}
+window.addEventListener('resize',fitViewer);window.addEventListener('orientationchange',()=>requestAnimationFrame(fitViewer));screen.orientation?.addEventListener('change',()=>requestAnimationFrame(fitViewer));window.visualViewport?.addEventListener('resize',fitViewer);window.visualViewport?.addEventListener('scroll',fitViewer);fitViewer();

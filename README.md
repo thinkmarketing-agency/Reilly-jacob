@@ -76,3 +76,15 @@ At phone widths, opening a photo shows an edge-to-edge viewer with the original 
 ## Shuffled Little Moments
 
 Little Moments now draws from all published photos in visible chapters. It starts with 12 shuffled photos and adds 12 more near the bottom (More moments is a keyboard-friendly fallback). Every photo appears once before the next shuffled cycle, with immediate repeats avoided between cycles when possible. The order is stable for this page visit and changes on refresh. Opening a stream photo uses that same growing order for desktop navigation or phone swipes; chapter galleries and tag-search results retain their own order. Rendering uses independent columns to append without reshuffling existing tiles. Published photo metadata is fetched in pages to avoid Supabase's default row cap. No SQL migration.
+
+## Rotation and photo-only zoom
+
+Phone/touch-device photo mode no longer depends solely on portrait width. The viewer uses the visual viewport and stays full screen across rotation. Pinch or double-tap zooms the photo (1–5×), one-finger dragging pans within its bounds, and navigation swipes resume at fit-to-screen zoom. Double-tap again or use Fit photo to screen in the revealed tools to reset. Rotation refits the same photo without changing its position in the sequence or source gallery. Input sizes and touch behavior reduce accidental iPhone page zoom without disabling browser accessibility zoom. Real-device iPhone pinch/rotation still require validation. No SQL changes.
+
+## Automatic upload optimization
+
+Apply `supabase/004_photo_optimization.sql` once. New uploads are decoded on the device and encoded as a JPEG view copy (up to 2560px long edge, targeting 850 KB) plus a thumbnail (up to 640px, targeting 100 KB). The encoder reduces quality/dimensions for large files, never enlarges image dimensions, and processes one photo at a time. Targets vary with image complexity; they are not hard quotas. Only those web-ready copies are uploaded. Blank captions remain blank. Originals on the user's device are untouched; the website is not an archive of full-resolution originals.
+
+The admin Photo storage panel shows actual bucket file bytes and progress against a clearly labeled 1 GB free-plan reference (not an account-plan lookup). Optimize existing photos downloads one at a time, writes both new files, conditionally switches the existing photo record by its original path, and only then retires the old stored file. Metadata, photo IDs and chapter covers stay intact. If processing/upload fails, the existing reference remains unchanged. Concurrent replacement conflicts clean up newly uploaded files. Existing photos already smaller than the combined outputs are retained. Failed storage cleanup uses the existing retry queue. Running the optimizer again skips completed records and retries unfinished ones.
+
+Thumbnails follow the same private storage policies as the full view copies; unpublished thumbnails cannot be signed or downloaded publicly. Permanent deletion now cleans up both variants. The migration adds no public bucket and makes no changes to existing file contents on its own.
