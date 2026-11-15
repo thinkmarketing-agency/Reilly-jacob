@@ -1,3 +1,4 @@
+import {layoutViewerImage} from './viewer-fit.js?v=12';
 import {MomentStream,photoKey} from './moments.js?v=7';
 import {swipeAction,clampZoom,clampPan} from './gestures.js?v=9';
 import {photoCaption} from './captions.js?v=5';
@@ -105,7 +106,7 @@ function openPhoto(items,index,source='gallery'){activeSource=source;activePhoto
 $('#previous-photo').onclick=()=>navigatePhoto('previous');
 $('#next-photo').onclick=()=>navigatePhoto('next');
 $('#lightbox').addEventListener('cancel',e=>{if(!discardEdits())e.preventDefault()});
-$('#edit-photo').onclick=()=>{if(!admin||!currentPhoto?.id)return;$('#edit-caption').value=currentPhoto.caption||'';$('#edit-tags').value=(currentPhoto.tags||[]).join(', ');$('#focal-x').value=currentPhoto.focal_x??50;$('#focal-y').value=currentPhoto.focal_y??50;$('#thumbnail-preview').src=currentPhoto.thumbUrl||currentPhoto.url;$('#cover-preview').src=currentPhoto.thumbUrl||currentPhoto.url;previewFrame();$('#photo-editor').hidden=false;$('#edit-photo').hidden=true;$('#edit-caption').focus()};
+$('#edit-photo').onclick=()=>{if(!admin||!currentPhoto?.id)return;$('#edit-caption').value=currentPhoto.caption||'';$('#edit-tags').value=(currentPhoto.tags||[]).join(', ');$('#focal-x').value=currentPhoto.focal_x??50;$('#focal-y').value=currentPhoto.focal_y??50;$('#thumbnail-preview').src=currentPhoto.thumbUrl||currentPhoto.url;$('#cover-preview').src=$('#thumbnail-preview').src;previewFrame();$('#photo-editor').hidden=false;$('#edit-photo').hidden=true;$('#edit-caption').focus()};
 $('#cancel-edit').onclick=()=>{if(discardEdits()){$('#photo-editor').hidden=true;$('#edit-photo').hidden=!admin;$('#photo-status').textContent=''}};
 async function checkAdmin(){
  admin=false;
@@ -166,14 +167,13 @@ $('#remove-photo').onclick=async()=>{
 };
 
 
-const phoneViewer=()=>matchMedia('(max-width:760px), (hover:none) and (pointer:coarse), (max-height:500px) and (max-width:1000px)').matches;
+const phoneViewer=()=>navigator.maxTouchPoints>0||matchMedia('(max-width:760px), (any-pointer:coarse), (max-height:500px) and (max-width:1100px)').matches;
 function navigatePhoto(direction){if(saving||!$('#photo-editor').hidden||photoZoom>1.02)return;if(activeSource==='moments'&&direction==='next'){momentStream.ensure(photoIndex+2);renderMoments()}const next=photoIndex+(direction==='next'?1:-1);if(next>=0&&next<activePhotos.length&&discardEdits()){photoIndex=next;displayPhoto()}}
 let photoZoom=1,panX=0,panY=0,gesture=null,pinch=null,ignoreTap=false,lastTap=0,tapTimer=null;
 const pointers=new Map();
 function applyPhotoZoom(){
  const stage=$('#viewer-stage'),image=$('#viewer-image');
- const pan=clampPan(panX,panY,photoZoom,stage.clientWidth,stage.clientHeight,image.naturalWidth,image.naturalHeight);panX=pan.x;panY=pan.y;
- image.style.transform=`translate3d(${panX}px,${panY}px,0) scale(${photoZoom})`;
+ const pan=layoutViewerImage(stage,image,photoZoom,panX,panY);panX=pan.x;panY=pan.y;
  $('#lightbox').classList.toggle('photo-zoomed',photoZoom>1.02);
  $('#reset-photo-zoom').hidden=photoZoom<=1.02;
 }
@@ -238,7 +238,7 @@ $('#lightbox').addEventListener('keydown',event=>{
 $('#lightbox').addEventListener('close',()=>{document.body.classList.remove('viewer-open');clearTimeout(tapTimer);resetPhotoZoom()});
 let orientationKey=`${screen.orientation?.type||''}:${innerWidth>innerHeight}`;
 function fitViewer(){
- const viewport=window.visualViewport,dialog=$('#lightbox');
+ const viewport=window.visualViewport,dialog=$('#lightbox');dialog.classList.toggle('immersive-viewer',phoneViewer());
  dialog.style.setProperty('--viewer-height',`${viewport?.height||innerHeight}px`);
  dialog.style.setProperty('--viewer-width',`${viewport?.width||innerWidth}px`);
  dialog.style.setProperty('--viewer-top',`${viewport?.offsetTop||0}px`);dialog.style.setProperty('--viewer-left',`${viewport?.offsetLeft||0}px`);
@@ -246,4 +246,5 @@ function fitViewer(){
  if(nextKey!==orientationKey){orientationKey=nextKey;if(dialog.open)resetPhotoZoom()}
  if(!phoneViewer()&&photoZoom>1)resetPhotoZoom();else applyPhotoZoom();
 }
-window.addEventListener('resize',fitViewer);window.addEventListener('orientationchange',()=>requestAnimationFrame(fitViewer));screen.orientation?.addEventListener('change',()=>requestAnimationFrame(fitViewer));window.visualViewport?.addEventListener('resize',fitViewer);window.visualViewport?.addEventListener('scroll',fitViewer);fitViewer();
+function refitAfterRotation(){clearTimeout(tapTimer);lastTap=0;if($('#lightbox').open)resetPhotoZoom();fitViewer();requestAnimationFrame(()=>requestAnimationFrame(fitViewer))}
+window.addEventListener('resize',fitViewer);window.addEventListener('orientationchange',refitAfterRotation);screen.orientation?.addEventListener('change',refitAfterRotation);window.visualViewport?.addEventListener('resize',fitViewer);window.visualViewport?.addEventListener('scroll',fitViewer);fitViewer();
