@@ -3,7 +3,7 @@ import {MomentStream,photoKey} from './moments.js?v=7';
 import {swipeAction,clampZoom,clampPan} from './gestures.js?v=9';
 import {photoCaption} from './captions.js?v=5';
 import {returnPhotoToInbox} from './photo-actions.js?v=3';
-import {backend,check,imageURL,installImageRefresh} from './api.js?v=2';
+import {backend,check,imageURL,imageURLs,imagePlaceholder,installImageRefresh} from './api.js?v=13';
 import {findPhotos,popularTags} from './search.js';
 let chapters=[],photos=[];
 let db=null,admin=false,currentPhoto=null,activePhotos=[],photoIndex=0,saving=false,covers=new Map(),activeChapter=null;
@@ -84,7 +84,9 @@ try{
   const albums=check(await db.from('albums').select('*').eq('published',true).order('created_at'));
   const rows=[];for(let from=0;;from+=500){const page=check(await db.from('photos').select('*').eq('published',true).order('created_at').order('id').range(from,from+499));rows.push(...page);if(page.length<500)break}
   const visible=new Set(albums.map(a=>a.id));
-  photos=await Promise.all(rows.filter(p=>visible.has(p.album_id)).map(async p=>({...p,caption:photoCaption(p.caption),chapter:p.album_id,url:await imageURL(db,p.path),thumbUrl:p.thumbnail_path?await imageURL(db,p.thumbnail_path):null})));
+  const published=rows.filter(photo=>visible.has(photo.album_id));
+  const urls=await imageURLs(db,published.flatMap(photo=>[photo.path,photo.thumbnail_path]));
+  photos=published.map(photo=>({...photo,caption:photoCaption(photo.caption),chapter:photo.album_id,url:urls.get(photo.path)||urls.get(photo.thumbnail_path)||imagePlaceholder,thumbUrl:urls.get(photo.thumbnail_path)||urls.get(photo.path)||imagePlaceholder}));
   chapters=albums.map(a=>[a.id,a.title]);covers=new Map(albums.map(a=>[a.id,a.cover_photo_id]));await checkAdmin();
  }else{
   chapters=[['local-memories','Memories']];photos=Array.from({length:15},(_,i)=>({caption:'Reilly & Jacob · Memory '+(i+1),url:`assets/images/jr${i+1}.jpeg`,chapter:'local-memories',tags:[]}));
@@ -96,7 +98,7 @@ function dirty(){return !$('#photo-editor').hidden && currentPhoto && ($('#edit-
 function discardEdits(){return !saving && (!dirty() || confirm('Discard your unsaved photo details?'))}
 function displayPhoto(){
  if(activeSource==='moments'){momentStream.ensure(photoIndex+4);renderMoments()}currentPhoto=activePhotos[photoIndex];resetPhotoZoom();$('#viewer-count').textContent=activeSource==='moments'?`Moment ${photoIndex+1}`:`${photoIndex+1} / ${activePhotos.length}`;
- $('#viewer-image').dataset.photoPath=currentPhoto.path||'';$('#viewer-image').src=currentPhoto.url;$('#viewer-image').alt=currentPhoto.caption||'Family memory';
+ $('#viewer-image').dataset.photoPath=currentPhoto.path||'';$('#viewer-image').src=currentPhoto.url;const target=currentPhoto;if(db&&target.path)imageURL(db,target.path).then(url=>{target.url=url;if(currentPhoto===target&&$('#lightbox').open)$('#viewer-image').src=url}).catch(()=>{$('#photo-status').textContent='This photo is temporarily unavailable. The other photos are still available.'});$('#viewer-image').alt=currentPhoto.caption||'Family memory';
  $('#photo-caption').textContent=currentPhoto.caption;renderPhotoTags();
  $('#photo-status').textContent='';$('#photo-editor').hidden=true;
  $('#edit-photo').hidden=!admin||!currentPhoto.id;updateCoverButton();

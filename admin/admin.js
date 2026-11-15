@@ -1,13 +1,14 @@
-import {preparePhoto,storePreparedPhoto,repairPhotoThumbnail,formatBytes} from '/image-optimization.js?v=11';
+import {makeUploadQueue,queueSnapshot} from '/upload-queue.js?v=13';
+import {preparePhoto,storePreparedPhoto,repairPhotoThumbnail,formatBytes} from '/image-optimization.js?v=13';
 import {photoCaption} from '/captions.js?v=5';
 import {deleteInboxRecords,removeStoredFiles} from '/photo-actions.js?v=10';
-import {backend,check,imageURL,installImageRefresh} from '/api.js?v=2';
+import {backend,check,imageURL,imageURLs,imagePlaceholder,installImageRefresh} from '/api.js?v=13';
 const $=s=>document.querySelector(s);let db,user;let busy=false;let pendingChapter=null;let pendingPhotoIds=[];const pendingFiles=new Set();const cleanupKey='family-photo-cleanup-v1';
 try{for(const path of JSON.parse(localStorage.getItem(cleanupKey)||'[]'))if(typeof path==='string')pendingFiles.add(path)}catch{}
 const message=s=>$('#status').textContent=s;
-async function task(fn){if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);try{await fn()}catch(e){message(e.message||'Something went wrong. Please try again.')}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}}
-async function refresh(){const albums=check(await db.from('albums').select('*').order('created_at'));const previous=$('#album').value;const repairPrevious=$('#repair-chapter').value;$('#repair-chapter').replaceChildren(new Option('All chapters',''));for(const chapter of albums)$('#repair-chapter').append(new Option(chapter.title,chapter.id));$('#repair-chapter').value=repairPrevious;$('#album').replaceChildren();const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose a destination…';$('#album').append(placeholder);for(const a of albums){const o=document.createElement('option');o.value=a.id;o.textContent=a.title;$('#album').append(o)}if(albums.some(a=>a.id===previous))$('#album').value=previous;const rows=[];for(let from=0;;from+=500){const page=check(await db.from('photos').select('*').order('created_at',{ascending:false}).order('id').range(from,from+499));rows.push(...page);if(page.length<500)break}await storageSummary(rows);renderChapters(albums,rows);$('#select-all-photos').hidden=$('#filter').value!=='inbox';$('#clear-selection').hidden=$('#filter').value!=='inbox';$('#selection-count').hidden=$('#filter').value!=='inbox';$('#delete-photos').hidden=$('#filter').value!=='inbox';$('#inbox-delete-note').hidden=$('#filter').value!=='inbox';$('#retry-cleanup').hidden=!pendingFiles.size;$('#counts').textContent=`${rows.filter(r=>!r.published).length} in inbox · ${rows.filter(r=>r.published).length} live`;$('#library').replaceChildren();for(const row of rows.filter(r=>$('#filter').value==='all'||($('#filter').value==='live'?r.published:!r.published))){const card=document.createElement('article');card.className='photo';const im=document.createElement('img');const previewPath=row.thumbnail_path||row.path;im.dataset.photoPath=previewPath;im.src=await imageURL(db,previewPath);im.alt=photoCaption(row.caption)||'Uploaded family photo';im.loading='lazy';const label=document.createElement('label');const input=document.createElement('input');input.type='checkbox';input.value=row.id;label.append(input,document.createTextNode((photoCaption(row.caption)||'Untitled')+' · '+(row.published?'Live':'Private inbox')));const location=document.createElement('p');const album=albums.find(a=>a.id===row.album_id);location.textContent=album?album.title:'Private inbox · No chapter assigned';card.append(location);const tags=document.createElement('p');tags.textContent=(row.tags||[]).join(', ');card.append(im,label,tags);$('#library').append(card)}updateSelectionCount()}
-async function session(){const result=await db.auth.getUser();user=result.data?.user;$('#login').hidden=!!user;$('#workspace').hidden=true;$('#logout').hidden=!user;if(!user){message('Sign in to upload and organize your photos.');return}if(!check(await db.rpc('is_family_admin'))){message('This account has not been given family administrator access.');return}$('#workspace').hidden=false;await refresh();message('Upload to your private inbox. Place selected photos into a chapter when they are ready to go live.')}
+async function task(fn){if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=b.id!=='pause-uploads');try{await fn()}catch(e){message(e.message||'Something went wrong. Please try again.')}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}}
+async function refresh(){const albums=check(await db.from('albums').select('*').order('created_at'));const previous=$('#album').value;const repairPrevious=$('#repair-chapter').value;$('#repair-chapter').replaceChildren(new Option('All chapters',''));for(const chapter of albums)$('#repair-chapter').append(new Option(chapter.title,chapter.id));$('#repair-chapter').value=repairPrevious;$('#album').replaceChildren();const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose a destination…';$('#album').append(placeholder);for(const a of albums){const o=document.createElement('option');o.value=a.id;o.textContent=a.title;$('#album').append(o)}if(albums.some(a=>a.id===previous))$('#album').value=previous;const rows=[];for(let from=0;;from+=500){const page=check(await db.from('photos').select('*').order('created_at',{ascending:false}).order('id').range(from,from+499));rows.push(...page);if(page.length<500)break}await storageSummary(rows);renderChapters(albums,rows);$('#select-all-photos').hidden=$('#filter').value!=='inbox';$('#clear-selection').hidden=$('#filter').value!=='inbox';$('#selection-count').hidden=$('#filter').value!=='inbox';$('#delete-photos').hidden=$('#filter').value!=='inbox';$('#inbox-delete-note').hidden=$('#filter').value!=='inbox';$('#retry-cleanup').hidden=!pendingFiles.size;$('#counts').textContent=`${rows.filter(r=>!r.published).length} in inbox · ${rows.filter(r=>r.published).length} live`;$('#library').replaceChildren();const previewUrls=await imageURLs(db,rows.filter(row=>$('#filter').value==='all'||($('#filter').value==='live'?row.published:!row.published)).map(row=>row.thumbnail_path||row.path));for(const row of rows.filter(r=>$('#filter').value==='all'||($('#filter').value==='live'?r.published:!r.published))){const card=document.createElement('article');card.className='photo';const im=document.createElement('img');const previewPath=row.thumbnail_path||row.path;im.dataset.photoPath=previewPath;im.src=previewUrls.get(previewPath)||imagePlaceholder;im.alt=photoCaption(row.caption)||'Uploaded family photo';im.loading='lazy';const label=document.createElement('label');const input=document.createElement('input');input.type='checkbox';input.value=row.id;label.append(input,document.createTextNode((photoCaption(row.caption)||'Untitled')+' · '+(row.published?'Live':'Private inbox')));const location=document.createElement('p');const album=albums.find(a=>a.id===row.album_id);location.textContent=album?album.title:'Private inbox · No chapter assigned';card.append(location);const tags=document.createElement('p');tags.textContent=(row.tags||[]).join(', ');card.append(im,label,tags);$('#library').append(card)}updateSelectionCount()}
+async function session(){const result=await db.auth.getUser();user=result.data?.user;$('#login').hidden=!!user;$('#workspace').hidden=true;$('#logout').hidden=!user;if(!user){message('Sign in to upload and organize your photos.');return}if(!check(await db.rpc('is_family_admin'))){message('This account has not been given family administrator access.');return}$('#workspace').hidden=false;await refresh();const previousBatch=readUploadQueue();if(previousBatch.length&&!uploadQueue.length){uploadQueue=previousBatch;renderUploadQueue()}message('Upload to your private inbox. Place selected photos into a chapter when they are ready to go live.')}
 $('#login').onsubmit=e=>{e.preventDefault();task(async()=>{check(await db.auth.signInWithPassword({email:$('#email').value,password:$('#password').value}));$('#password').value='';await session()})};
 $('#logout').onclick=()=>task(async()=>{check(await db.auth.signOut());$('#delete-inbox').close();pendingPhotoIds=[];$('#library').replaceChildren();await session()});
 $('#new-album').onsubmit=e=>{e.preventDefault();task(async()=>{check(await db.from('albums').insert({title:$('#album-name').value.trim(),chapter:'memories',published:true}));$('#album-name').value='';await refresh();message('Chapter created.')})};
@@ -22,16 +23,43 @@ async function storageSummary(rows){
  const remaining=rows.filter(row=>!row.optimized_at).length;
  $('#storage-details').textContent=`Compared with the 1 GB free-plan allowance. ${remaining} existing photos not yet optimized.`+(saved?` Web copies save about ${formatBytes(saved)} versus their originals.`:'')+(pendingFiles.size?' File cleanup is pending; use Retry file cleanup.':'');
 }
-$('#upload').onclick=()=>task(async()=>{
- const files=[...$('#files').files];if(!files.length)throw Error('Choose photos first.');await requireOptimizationSetup();
- const failures=[];let count=0,before=0,after=0;
- for(const file of files){try{
-  message(`Optimizing ${count+failures.length+1} of ${files.length}…`);
-  const prepared=await preparePhoto(file);await storePreparedPhoto(db,user.id,prepared,null,retireFiles);
-  count++;before+=prepared.originalBytes;after+=prepared.totalBytes;
- }catch(error){failures.push(`${file.name}: ${error.message}`)}}
- await refresh();message(`${count} photos uploaded to the private inbox. ${formatBytes(before)} became ${formatBytes(after)}, including thumbnails.`+(failures.length?'\nFailed (select these files again to retry):\n'+failures.join('\n'):''));$('#files').value='';
-});
+let uploadQueue=[],pauseUploads=false,uploadActive=false;
+function uploadKey(){return `family-upload-batch-v1:${user.id}`}
+function readUploadQueue(){try{return JSON.parse(localStorage.getItem(uploadKey())||'[]')}catch{return []}}
+function persistUploadQueue(){try{localStorage.setItem(uploadKey(),JSON.stringify(queueSnapshot(uploadQueue)))}catch{}}
+function renderUploadQueue(){
+ const done=uploadQueue.filter(entry=>entry.state==='saved').length,failed=uploadQueue.filter(entry=>entry.state==='failed').length,waiting=uploadQueue.length-done-failed;
+ $('#upload-progress').hidden=!uploadQueue.length;$('#upload-progress').max=uploadQueue.length||1;$('#upload-progress').value=done+failed;
+ $('#upload-summary').textContent=uploadQueue.length?`${done} saved · ${failed} failed · ${waiting} waiting / processing`:'';
+ $('#retry-uploads').hidden=uploadActive||!uploadQueue.some(entry=>entry.state!=='saved'&&entry.file);
+ $('#pause-uploads').hidden=!uploadActive;$('#upload-details').hidden=!uploadQueue.length;
+ $('#upload-results').replaceChildren();for(const entry of uploadQueue){const line=document.createElement('li');line.textContent=`${entry.name}: ${entry.state}${entry.error?' — '+entry.error:''}`;if(entry.state==='failed')line.className='upload-failed';$('#upload-results').append(line)}
+}
+async function runUploadQueue(){
+ await requireOptimizationSetup();pauseUploads=false;uploadActive=true;
+ try{
+  // Stable photo IDs make retry/resume safe, including a lost success response.
+  const saved=new Set();for(let from=0;from<uploadQueue.length;from+=100){const rows=check(await db.from('photos').select('id').in('id',uploadQueue.slice(from,from+100).map(entry=>entry.id)));for(const row of rows)saved.add(row.id)}
+  for(const entry of uploadQueue)if(saved.has(entry.id)){entry.state='saved';entry.error=''}
+  persistUploadQueue();renderUploadQueue();
+  for(const entry of uploadQueue){
+   if(pauseUploads)break;if(entry.state==='saved')continue;
+   entry.state='processing';entry.error='';persistUploadQueue();renderUploadQueue();
+   try{const prepared=await preparePhoto(entry.file);await storePreparedPhoto(db,user.id,prepared,null,retireFiles,entry.id);entry.state='saved'}
+   catch(error){entry.state='failed';entry.error=error.message||'Upload failed. Please retry.'}
+   persistUploadQueue();renderUploadQueue();
+   // Give the browser a rendering/cleanup opportunity between large photos.
+   await new Promise(resolve=>setTimeout(resolve,40));
+  }
+ }finally{uploadActive=false;persistUploadQueue();renderUploadQueue()}
+ const savedCount=uploadQueue.filter(entry=>entry.state==='saved').length;
+ message(`${savedCount} of ${uploadQueue.length} photos saved to the private inbox. See photo-by-photo results for failures or use Retry failed / resume uploads.`);
+ await refresh();
+}
+$('#upload').onclick=()=>task(async()=>{const files=[...$('#files').files];if(!files.length)throw Error('Choose photos first.');uploadQueue=makeUploadQueue(files,readUploadQueue());persistUploadQueue();renderUploadQueue();await runUploadQueue()});
+$('#retry-uploads').onclick=()=>task(async()=>{for(const entry of uploadQueue)if(entry.state!=='saved'){entry.state='waiting';entry.error=''}await runUploadQueue()});
+$('#pause-uploads').onclick=()=>{pauseUploads=true;$('#pause-uploads').disabled=true;message('Finishing the current photo, then pausing safely…')};
+window.addEventListener('beforeunload',event=>{if(uploadActive){event.preventDefault();event.returnValue=''}});
 $('#optimize-existing').onclick=()=>task(async()=>{
  await requireOptimizationSetup();
  if(!confirm('Optimize the existing photos for the website? Captions, tags, chapter placements and covers stay intact. Larger stored originals will be replaced with smaller web copies after successful processing. Keep your original photos on your own device.'))return;

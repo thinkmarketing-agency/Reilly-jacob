@@ -96,3 +96,9 @@ Thumbnail v2 uses staged high-quality downsampling at up to 1280px long edge and
 ## Unified landscape fitting
 
 The photo viewer now uses the same fixed viewport surface at every screen size. The image box is explicitly sized from both natural image dimensions and the available viewport: min(viewport width / image width, viewport height / image height). Portrait images therefore get side margins in landscape, and landscape images get top/bottom margins in portrait. Device rotation refits the current photo at 1× and clears pan. Touch detection includes maxTouchPoints/any-pointer so an attached iPad trackpad does not switch the viewer into an old scrolling layout. Desktop uses the same fit surface with controls visible.
+
+## Large-batch loading and upload recovery
+
+Storage link signing now uses sequential batches of 100 rather than hundreds of simultaneous database-backed requests. An unavailable photo link no longer prevents the entire gallery or admin library from rendering. Individual full-size links are refreshed on opening a photo.
+
+Uploads accept source files up to 80 MB while only storing compressed copies. JPEG/PNG dimensions are read before decoding; supported browsers resize during bitmap decoding to reduce memory pressure, and inputs above 60 megapixels are rejected clearly. Processing remains sequential. A durable browser-local queue records per-file status/errors and stable photo IDs. Retry/resume checks those IDs before upload to avoid duplicating successes from that queue. Pausing finishes the current photo safely. After closing/reloading, reselect the same files to resume; original image bytes are not stored in browser persistence. Older batches made before this queue do not have recoverable filename/ID mappings. No new SQL migration is required.
